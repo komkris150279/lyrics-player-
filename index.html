@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2F55D4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>เครื่องเล่นเนื้อเพลง</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Noto+Serif+Thai:wght@400;600&display=swap">
+<style>
+/* Layout: player + queue on the left, a tall lyric sheet on the right; one column on phones.
+   Look: cool paper-blue ground, cobalt controls, marigold highlighter for the line being sung. */
+:root{
+  color-scheme:light;
+  --bg:#EDF0F5; --surface:#FFFFFF; --surface-2:#E2E7F0; --ink:#1B2433; --muted:#5B677E; --line:#D2D9E5;
+  --accent:#2F55D4; --accent-ink:#FFFFFF; --mark-soft:rgba(242,182,50,.5); --mark:#E9A91B; --lyric-dim:#76819A;
+  --font-ui:'IBM Plex Sans Thai',system-ui,'Noto Sans Thai',sans-serif;
+  --font-lyric:'Noto Serif Thai','Noto Serif',Georgia,serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --lyric-size:1.5rem;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#11141C; --surface:#1A1F2C; --surface-2:#252C3D; --ink:#E7EBF3; --muted:#9AA5BC; --line:#2B3345;
+    --accent:#8CA5FF; --accent-ink:#0F1530; --mark-soft:rgba(245,196,81,.3); --mark:#F5C451; --lyric-dim:#6E7A94;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font-ui); font-size:15px; line-height:1.5;
+  padding-block:calc(20px + env(safe-area-inset-top,0px)) calc(28px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button,input,textarea{font:inherit}
+[hidden]{display:none!important}
+.app{max-width:1080px;margin:0 auto}
+.app.drop{outline:2px dashed var(--accent);outline-offset:10px;border-radius:14px}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px;margin-bottom:16px}
+.top h1{font-size:1.3rem;font-weight:600;margin:0}
+.top p{margin:0;color:var(--muted);font-size:.88rem}
+.grid{display:grid;grid-template-columns:minmax(0,370px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:820px){.grid{grid-template-columns:minmax(0,1fr)}}
+.col-left{display:grid;gap:18px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.player{padding:16px}
+
+.now{display:grid;grid-template-columns:104px minmax(0,1fr);gap:14px;align-items:center}
+.cover{width:104px;height:104px;border-radius:12px;background:var(--surface-2);display:flex;align-items:center;gap:3px;padding:14px 12px}
+.bar{flex:1;border-radius:99px;background:var(--accent);transform-origin:center;animation:bob 1.15s ease-in-out infinite;animation-play-state:paused}
+.bar.m{background:var(--mark)}
+.playing .bar{animation-play-state:running}
+@keyframes bob{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.5)}}
+.eyebrow{font-family:var(--font-mono);font-size:.75rem;color:var(--muted)}
+.title{margin:2px 0 2px;font-size:1.1rem;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.artist{font-size:.9rem;color:var(--muted);overflow-wrap:anywhere}
+.sub{font-size:.8rem;color:var(--muted);margin-top:2px}
+
+.seek{display:grid;gap:2px;margin-top:16px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:99px;background:linear-gradient(to right,var(--accent) var(--p,0%),var(--line) var(--p,0%))}
+input[type=range]::-moz-range-track{height:4px;border-radius:99px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:99px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);border:0;margin-top:-5px}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent);border:0}
+.times{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.transport{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:6px}
+.ibtn{position:relative;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--ink);display:grid;place-items:center;cursor:pointer}
+.ibtn:hover{background:var(--surface-2)}
+.ibtn svg{width:24px;height:24px;fill:currentColor}
+.ibtn.play{width:62px;height:62px;background:var(--accent);color:var(--accent-ink)}
+.ibtn.play:hover{background:var(--accent);filter:brightness(1.1)}
+.ibtn.play svg{width:30px;height:30px}
+.ibtn.toggle{color:var(--muted)}
+.ibtn.toggle.on{color:var(--accent)}
+.badge{position:absolute;right:6px;bottom:6px;font-family:var(--font-mono);font-size:.62rem;font-weight:500;line-height:1;background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:2px 4px}
+.extras{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 10px;margin-top:8px}
+.extras .grp{display:flex;align-items:center;gap:2px}
+.vol{display:flex;align-items:center;gap:2px;flex:1;min-width:130px;max-width:190px}
+.vol input{flex:1;min-width:0}
+.vol .ibtn svg{width:22px;height:22px}
+
+.txtbtn{display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-ui);font-size:.85rem;font-weight:500;min-height:38px;padding:6px 14px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.txtbtn:hover{background:var(--surface-2)}
+.txtbtn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.txtbtn.primary:hover{filter:brightness(1.1);background:var(--accent)}
+.txtbtn:disabled{opacity:.45;cursor:default}
+.txtbtn.mono{font-family:var(--font-mono);font-size:.8rem}
+
+.q-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.q-head h3{margin:0;font-size:1rem;font-weight:600}
+.queue{list-style:none;margin:6px 0 0;padding:0}
+.queue li{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.q{display:grid;grid-template-columns:26px minmax(0,1fr) auto;align-items:center;gap:10px;flex:1;min-width:0;min-height:52px;padding:8px 4px;border:0;background:transparent;color:var(--ink);text-align:left;cursor:pointer}
+.q:hover{background:var(--surface-2)}
+.q .no{font-family:var(--font-mono);font-size:.78rem;color:var(--muted);text-align:center}
+.q .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q .nm small{display:block;color:var(--muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis}
+.q .du{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.q .tag{font-family:var(--font-ui);font-size:.7rem;color:var(--ink);background:var(--mark-soft);border-radius:4px;padding:0 5px;line-height:1.5}
+.q.cur .nm{color:var(--accent);font-weight:600}
+.q.cur .no{color:var(--accent)}
+.rm{border:0;background:transparent;color:var(--muted);width:44px;cursor:pointer;font-size:1.1rem}
+.rm:hover{color:var(--ink);background:var(--surface-2)}
+.rm.armed{color:var(--accent-ink);background:var(--accent);font-size:.8rem}
+.hint{margin:10px 0 0;font-size:.82rem;color:var(--muted)}
+
+.lyr-card{--lh:max(400px,min(76vh,720px));height:var(--lh);display:flex;flex-direction:column;overflow:hidden}
+.lyr-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 8px;padding:0 12px 0 8px;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:2px}
+.tab{min-height:46px;padding:8px 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-weight:500;cursor:pointer}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.sizes{display:flex;gap:6px}
+.sizes .txtbtn{min-width:44px;padding:4px 10px}
+.lyr-status{padding:8px 18px 0;font-family:var(--font-mono);font-size:.74rem;color:var(--muted)}
+.lyr-body{flex:1;min-height:0;position:relative;overflow-y:auto;padding:calc(var(--lh)/2 - 30px) 22px}
+.lyr-body.is-empty{padding-block:28px}
+.ln{margin:0 0 .3em;font-family:var(--font-lyric);font-size:var(--lyric-size);line-height:1.75;color:var(--lyric-dim);cursor:pointer;overflow-wrap:anywhere;transition:color .25s}
+.ln:hover{color:var(--muted)}
+.ln.active{color:var(--ink);font-weight:600}
+.ln.active span{background:linear-gradient(transparent 56%,var(--mark-soft) 56%);-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.lyr-body.plain{padding-block:20px 40px}
+.lyr-body.plain .ln{color:var(--ink);cursor:default}
+.gap{height:1.1em}
+.empty{max-width:36ch;display:grid;gap:12px;justify-items:start;color:var(--muted)}
+.empty strong{color:var(--ink);font-weight:600}
+.pane{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:12px 16px 16px;overflow-y:auto}
+.pane .hint{margin:0}
+.pane .row{display:flex;flex-wrap:wrap;gap:8px}
+.search{display:flex;gap:8px}
+.search input{flex:1;min-width:0;min-height:40px;padding:6px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.results{display:grid;gap:4px}
+.res{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;text-align:left;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);cursor:pointer}
+.res:hover{background:var(--surface-2)}
+.res small{display:block;color:var(--muted)}
+.res .tag{font-size:.7rem;background:var(--mark-soft);border-radius:4px;padding:0 5px}
+#lyrText{flex:1;min-height:180px;resize:none;width:100%;font-family:var(--font-lyric);font-size:1rem;line-height:1.75;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px}
+.stamp-list{flex:1;min-height:0;position:relative;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.srow{display:grid;grid-template-columns:72px minmax(0,1fr);gap:10px;align-items:baseline;padding:7px 12px;font-family:var(--font-lyric);line-height:1.6;border-bottom:1px solid var(--line)}
+.srow:last-child{border-bottom:0}
+.srow .st{font-family:var(--font-mono);font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.srow.next{background:var(--mark-soft)}
+.srow.next .st{color:var(--ink)}
+.srow.done .tx{color:var(--muted)}
+.stamp-empty{padding:18px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:min(92vw,420px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.88rem;z-index:20;text-align:center}
+@media (prefers-reduced-motion: reduce){.bar{animation:none}.ln{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <header class="top">
+    <h1>เครื่องเล่นเนื้อเพลง</h1>
+    <p>เพิ่มเพลงครั้งเดียว ค้นเนื้อเพลงให้เอง เปิดมาครั้งหน้าเพลงยังอยู่</p>
+  </header>
+
+  <main class="grid">
+    <div class="col-left">
+      <section class="card player" id="player" aria-label="เครื่องเล่น">
+        <div class="now">
+          <div class="cover" id="cover" aria-hidden="true"></div>
+          <div>
+            <div class="eyebrow" id="trackNo"></div>
+            <h2 class="title" id="title"></h2>
+            <div class="artist" id="artist"></div>
+            <div class="sub" id="sub"></div>
+          </div>
+        </div>
+
+        <div class="seek">
+          <input type="range" id="seek" min="0" max="1000" step="1" value="0" aria-label="ตำแหน่งในเพลง">
+          <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+        </div>
+
+        <div class="transport">
+          <button class="ibtn" id="prev" aria-label="เพลงก่อนหน้า"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zM9.5 12L18 6v12z"/></svg></button>
+          <button class="ibtn play" id="play" aria-label="เล่น"><svg viewBox="0 0 24 24" id="playIcon" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+          <button class="ibtn" id="next" aria-label="เพลงถัดไป"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18V6l8.5 6z"/></svg></button>
+        </div>
+
+        <div class="extras">
+          <div class="grp">
+            <button class="ibtn toggle" id="shuffle" aria-pressed="false" aria-label="สุ่มเพลง"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+            <button class="ibtn toggle" id="repeat" aria-label="เล่นซ้ำ: ปิด"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg><span class="badge" id="repBadge" hidden>1</span></button>
+            <button class="txtbtn mono" id="speed" aria-label="ความเร็วในการเล่น">1×</button>
+          </div>
+          <div class="vol">
+            <button class="ibtn" id="mute" aria-label="ปิดเสียง"><svg viewBox="0 0 24 24" id="volIcon" aria-hidden="true"></svg></button>
+            <input type="range" id="vol" min="0" max="1" step="0.01" value="1" aria-label="ระดับเสียง">
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="คิวเพลง">
+        <div class="q-head">
+          <h3>เพลงของฉัน</h3>
+          <label class="txtbtn primary" id="addBtn" for="fileInput" tabindex="0" role="button">+ เพิ่มไฟล์เพลง</label>
+        </div>
+        <ol class="queue" id="queue"></ol>
+        <p class="hint" id="saveHint">เพลงที่เพิ่มจะถูกเก็บไว้ในเบราว์เซอร์เครื่องนี้ ไม่ต้องเพิ่มใหม่ทุกครั้ง ลากไฟล์เพลงมาวางบนหน้านี้ได้ด้วย</p>
+        <input id="fileInput" class="sr" type="file" multiple aria-label="เลือกไฟล์เพลง">
+        <input id="lrcInput" class="sr" type="file" aria-label="เลือกไฟล์เนื้อเพลง">
+      </section>
+    </div>
+
+    <section class="card lyr-card" id="lyrCard" aria-label="เนื้อเพลง">
+      <div class="lyr-head">
+        <div class="tabs" role="tablist" aria-label="โหมดเนื้อเพลง">
+          <button class="tab" role="tab" id="tabView" aria-selected="true" aria-controls="paneView">ดูเนื้อ</button>
+          <button class="tab" role="tab" id="tabEdit" aria-selected="false" aria-controls="paneEdit">ค้นหา / แก้ไข</button>
+          <button class="tab" role="tab" id="tabStamp" aria-selected="false" aria-controls="paneStamp">ปักเวลา</button>
+        </div>
+        <div class="sizes">
+          <button class="txtbtn" id="sizeDn" aria-label="ลดขนาดตัวอักษร">A−</button>
+          <button class="txtbtn" id="sizeUp" aria-label="เพิ่มขนาดตัวอักษร">A+</button>
+        </div>
+      </div>
+      <div class="lyr-status" id="lyrStatus"></div>
+
+      <div class="lyr-body" id="paneView" role="tabpanel" aria-labelledby="tabView"></div>
+
+      <div class="pane" id="paneEdit" role="tabpanel" aria-labelledby="tabEdit" hidden>
+        <p class="hint">ค้นหาเนื้อเพลงจากชื่อเพลงหรือศิลปิน เลือกผลที่ตรงกับเพลงนี้ หรือวางเนื้อเพลงเองด้านล่าง</p>
+        <form class="search" id="searchForm">
+          <label class="sr" for="qInput">ค้นหาเนื้อเพลง</label>
+          <input id="qInput" type="search" placeholder="ชื่อเพลง ศิลปิน" autocomplete="off">
+          <button class="txtbtn primary" type="submit" id="qBtn">ค้นหา</button>
+        </form>
+        <div class="results" id="qResults"></div>
+        <label class="sr" for="lyrText">เนื้อเพลง</label>
+        <textarea id="lyrText" spellcheck="false" placeholder="วางเนื้อเพลงที่นี่ จะเป็นเนื้อธรรมดาหรือแบบ LRC ที่มีเวลา เช่น [00:12.50] ข้อความ ก็ได้"></textarea>
+        <div class="row">
+          <button class="txtbtn primary" id="saveLyr">บันทึกเนื้อเพลง</button>
+          <label class="txtbtn" id="openLrc" for="lrcInput" tabindex="0" role="button">เปิดไฟล์ .lrc / .txt</label>
+          <button class="txtbtn" id="copyLyr">คัดลอก</button>
+          <button class="txtbtn" id="clearLyr">ล้าง</button>
+        </div>
+      </div>
+
+      <div class="pane" id="paneStamp" role="tabpanel" aria-labelledby="tabStamp" hidden>
+        <p class="hint">เล่นเพลง แล้วกดปุ่มด้านล่าง (หรือกด Space) ตอนที่ร้องถึงแต่ละบรรทัด ระบบชดเชยความหน่วงของนิ้วให้ 0.15 วินาที</p>
+        <div class="stamp-list" id="stampList"></div>
+        <div class="row">
+          <button class="txtbtn primary" id="stampBtn">ปักเวลา</button>
+          <button class="txtbtn" id="stampBack">ย้อน 1 บรรทัด</button>
+          <button class="txtbtn" id="stampReset">เริ่มใหม่</button>
+          <button class="txtbtn" id="stampSave">บันทึก</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var audio=new Audio();
+audio.preload='metadata';
+var reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+var DEMO_LRC=[
+'[00:00.00]♪',
+'[00:03.80]เช้านี้ฟ้าเปิดช้า ๆ',
+'[00:07.80]กาแฟยังอุ่นอยู่ในมือ',
+'[00:11.80]เสียงกีตาร์เบา ๆ ลอยมาจากห้องข้าง',
+'[00:15.80]ทำนองเดิมที่ไม่เคยลืม',
+'[00:19.80]ฮัมไปด้วยกันก็ได้นะ',
+'[00:23.80]ไม่ต้องรีบร้อนไปไหน',
+'[00:27.80]วันนี้ขอแค่เพลงนี้ก็พอ'
+].join('\n');
+
+var state={tracks:[],cur:-1,shuffle:false,repeat:0,tab:'view',dragging:false,userScrollUntil:0,activeIdx:-1,lineEls:[],speedIdx:1,sizeIdx:2};
+var SPEEDS=[0.75,1,1.25,1.5];
+var SIZES=[1.1,1.3,1.5,1.75,2];
+var stamp={lines:[],times:[],idx:0};
+var tmpId=-1;
+
+/* ---------- helpers ---------- */
+function fmt(t){if(!isFinite(t)||t<0)t=0;var m=Math.floor(t/60),s=Math.floor(t%60);return m+':'+(s<10?'0':'')+s}
+function fmtLrc(t){var cs=Math.round(Math.max(0,t)*100);var m=Math.floor(cs/6000),s=Math.floor((cs%6000)/100),c=cs%100;var p=function(n){return (n<10?'0':'')+n};return '['+p(m)+':'+p(s)+'.'+p(c)+']'}
+function fmtStamp(t){return fmtLrc(t).slice(1,-1)}
+function cur(){return state.tracks[state.cur]}
+var toastTimer=0;
+function toast(msg){var el=$('toast');el.textContent=msg;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.hidden=true},2800)}
+function hash(s){var h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function label(t){return t.title||t.name}
+
+/* ---------- storage: songs live in IndexedDB so they are still here next time ---------- */
+var db=null;
+function idbOpen(){
+  return new Promise(function(res){
+    try{
+      var rq=indexedDB.open('lyric-player',1);
+      rq.onupgradeneeded=function(){rq.result.createObjectStore('tracks',{keyPath:'id',autoIncrement:true})};
+      rq.onsuccess=function(){db=rq.result;res(true)};
+      rq.onerror=function(){res(false)};
+    }catch(e){res(false)}
+  });
+}
+function idbAll(){
+  return new Promise(function(res){
+    if(!db)return res([]);
+    try{
+      var rq=db.transaction('tracks','readonly').objectStore('tracks').getAll();
+      rq.onsuccess=function(){res(rq.result||[])};
+      rq.onerror=function(){res([])};
+    }catch(e){res([])}
+  });
+}
+function idbPut(rec){
+  return new Promise(function(res){
+    if(!db)return res(null);
+    try{
+      var rq=db.transaction('tracks','readwrite').objectStore('tracks').put(rec);
+      rq.onsuccess=function(){res(rq.result)};
+      rq.onerror=function(){res(null)};
+    }catch(e){res(null)}
+  });
+}
+function idbDel(id){
+  return new Promise(function(res){
+    if(!db)return res();
+    try{
+      var rq=db.transaction('tracks','readwrite').objectStore('tracks').delete(id);
+      rq.onsuccess=rq.onerror=function(){res()};
+    }catch(e){res()}
+  });
+}
+function toRecord(t){
+  var r={name:t.name,blob:t.blob,size:t.size,title:t.title,artist:t.artist,album:t.album,dur:t.dur,raw:t.raw,source:t.source,looked:t.looked,embedded:t.embedded};
+  if(t.id>0)r.id=t.id;
+  return r;
+}
+function saveTrack(t){
+  if(t.isDemo)return Promise.resolve();
+  return idbPut(toRecord(t)).then(function(id){if(id!=null)t.id=id});
+}
+function fromRecord(r){
+  var t={id:r.id,name:r.name,blob:r.blob,size:r.size,title:r.title||'',artist:r.artist||'',album:r.album||'',dur:r.dur||0,
+    raw:r.raw||'',source:r.source||'',looked:!!r.looked,embedded:r.embedded||'',isDemo:false,err:'',url:URL.createObjectURL(r.blob),synced:false,lines:[]};
+  var p=parseLyrics(t.raw);t.synced=p.synced;t.lines=p.lines;
+  return t;
+}
+
+/* ---------- lyrics parsing ---------- */
+function parseLyrics(raw){
+  var lines=String(raw||'').replace(/\r/g,'').split('\n');
+  var out=[],synced=false,offset=0;
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i];
+    var meta=line.match(/^\s*\[(ar|ti|al|by|offset|length|re|ve|au):(.*)\]\s*$/i);
+    if(meta){if(meta[1].toLowerCase()==='offset')offset=(parseInt(meta[2],10)||0)/1000;continue}
+    var re=/\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
+    var stamps=[],m;
+    while((m=re.exec(line))!==null)stamps.push(m);
+    var text=line.replace(/\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g,'').trim();
+    if(stamps.length){
+      synced=true;
+      for(var k=0;k<stamps.length;k++){
+        var s=stamps[k];
+        var frac=s[3]?parseInt((s[3]+'00').slice(0,3),10)/1000:0;
+        out.push({t:Math.max(0,parseInt(s[1],10)*60+parseInt(s[2],10)+frac-offset),text:text});
+      }
+    }else{
+      out.push({t:null,text:text});
+    }
+  }
+  if(synced){
+    out=out.filter(function(l){return l.t!==null&&l.text});
+    out.sort(function(a,b){return a.t-b.t});
+  }else{
+    while(out.length&&!out[0].text)out.shift();
+    while(out.length&&!out[out.length-1].text)out.pop();
+  }
+  return {synced:synced&&out.length>0,lines:out};
+}
+function applyRaw(tr,raw,source){
+  tr.raw=raw;tr.source=source||'manual';tr.looked=true;
+  var p=parseLyrics(raw);
+  tr.synced=p.synced;tr.lines=p.lines;
+  saveTrack(tr);
+}
+
+/* ---------- tags + lyric search (LRCLIB) ---------- */
+function readTags(file){
+  return new Promise(function(res){
+    var done=false;
+    function finish(v){if(!done){done=true;res(v)}}
+    setTimeout(function(){finish({})},4000);
+    try{
+      if(!window.jsmediatags)return finish({});
+      window.jsmediatags.read(file,{
+        onSuccess:function(tag){
+          var t=(tag&&tag.tags)||{};
+          var ly=t.lyrics;
+          if(ly&&typeof ly==='object')ly=ly.lyrics;
+          finish({title:t.title||'',artist:t.artist||'',album:t.album||'',lyrics:typeof ly==='string'?ly:''});
+        },
+        onError:function(){finish({})}
+      });
+    }catch(e){finish({})}
+  });
+}
+function fromFilename(name){
+  var base=name.replace(/\.[^.]+$/,'').replace(/_/g,' ').trim();
+  var i=base.indexOf(' - ');
+  if(i>0)return {artist:base.slice(0,i).trim(),title:base.slice(i+3).trim()};
+  return {artist:'',title:base};
+}
+function qs(o){return Object.keys(o).filter(function(k){return o[k]}).map(function(k){return k+'='+encodeURIComponent(o[k])}).join('&')}
+function getJson(url){
+  var ctl=window.AbortController?new AbortController():null;
+  var timer=setTimeout(function(){if(ctl)ctl.abort()},9000);
+  return fetch(url,ctl?{signal:ctl.signal}:{}).then(function(r){
+    clearTimeout(timer);
+    if(r.status===404)return null;
+    if(!r.ok)throw new Error('http '+r.status);
+    return r.json();
+  },function(e){clearTimeout(timer);throw e});
+}
+var LR='https://lrclib.net/api/';
+function hasLyr(j){return j&&(j.syncedLyrics||j.plainLyrics)}
+function closeDur(j,d){return !d||!j.duration||Math.abs(j.duration-d)<=3}
+/* Throws on network failure; resolves null when nothing matches. */
+function lrclibFind(title,artist,album,dur){
+  var chain=Promise.resolve(null);
+  if(title&&artist){
+    chain=getJson(LR+'get?'+qs({track_name:title,artist_name:artist,album_name:album,duration:dur?Math.round(dur):''}))
+      .then(function(j){return hasLyr(j)&&closeDur(j,dur)?j:null});
+  }
+  return chain.then(function(hit){
+    if(hit)return hit;
+    var q=title&&artist?{track_name:title,artist_name:artist}:{q:title};
+    return getJson(LR+'search?'+qs(q)).then(function(list){
+      list=(list||[]).filter(function(j){return hasLyr(j)&&closeDur(j,dur)});
+      if(!list.length)return null;
+      var synced=list.filter(function(j){return j.syncedLyrics});
+      return (synced[0]||list[0]);
+    });
+  });
+}
+function autoFetch(tr){
+  if(tr.isDemo||tr.raw||tr.looked||tr.fetching)return;
+  if(tr.embedded){applyRaw(tr,tr.embedded,'embedded');refreshLyrics(tr);return}
+  if(!tr.title)return;
+  tr.fetching=true;tr.offline=false;
+  refreshLyrics(tr);
+  lrclibFind(tr.title,tr.artist,tr.album,tr.dur).then(function(j){
+    tr.fetching=false;
+    if(j)applyRaw(tr,j.syncedLyrics||j.plainLyrics,'lrclib');
+    else{tr.looked=true;saveTrack(tr)}
+    refreshLyrics(tr);
+  },function(){
+    tr.fetching=false;tr.offline=true;
+    refreshLyrics(tr);
+  });
+}
+function refreshLyrics(tr){
+  if(cur()!==tr)return;
+  renderLyrics();renderQueue();renderNow();
+  if(state.tab==='edit')$('lyrText').value=tr.raw;
+}
+
+/* ---------- demo track (synthesised in the browser) ---------- */
+function makeDemoWav(){
+  var sr=22050,secs=32,n=sr*secs,buf=new Float32Array(n);
+  var hz=function(m){return 440*Math.pow(2,(m-69)/12)};
+  function tone(m,start,len,amp,pad){
+    var f=hz(m),s0=Math.floor(start*sr),s1=Math.min(n,Math.floor((start+len)*sr));
+    for(var i=s0;i<s1;i++){
+      var t=(i-s0)/sr,env;
+      if(pad)env=Math.min(1,t/0.25)*Math.max(0,Math.min(1,(len-t)/0.4));
+      else env=Math.min(1,t/0.008)*Math.exp(-t*3.2);
+      var ph=2*Math.PI*f*t;
+      buf[i]+=amp*env*(Math.sin(ph)+(pad?0.25:0.35)*Math.sin(2*ph));
+    }
+  }
+  var chords=[[57,60,64],[53,57,60],[55,60,64],[55,59,62]];
+  var mel=[[69,72,76,72],[72,74,77,74],[76,72,67,72],[74,71,67,71],
+           [69,72,76,79],[77,76,74,72],[72,76,79,76],[74,71,74,67],
+           [69,72,76,72],[72,74,77,81],[79,76,72,76],[74,71,67,71],
+           [76,74,72,69],[77,76,74,72],[72,74,76,79],[72,0,0,0]];
+  for(var b=0;b<16;b++){
+    var c=chords[b%4];
+    for(var j=0;j<c.length;j++)tone(c[j],b*2,2.05,0.07,true);
+    tone(c[0]-12,b*2,0.9,0.12,false);
+    tone(c[0]-12,b*2+1,0.9,0.1,false);
+    for(var k=0;k<4;k++){if(mel[b][k])tone(mel[b][k],b*2+k*0.5,0.9,0.22,false)}
+  }
+  var peak=0;for(var i=0;i<n;i++){var a=Math.abs(buf[i]);if(a>peak)peak=a}
+  var g=peak?0.8/peak:1;
+  var dv=new DataView(new ArrayBuffer(44+n*2));
+  function w(o,s){for(var i=0;i<s.length;i++)dv.setUint8(o+i,s.charCodeAt(i))}
+  w(0,'RIFF');dv.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');dv.setUint32(16,16,true);
+  dv.setUint16(20,1,true);dv.setUint16(22,1,true);dv.setUint32(24,sr,true);dv.setUint32(28,sr*2,true);
+  dv.setUint16(32,2,true);dv.setUint16(34,16,true);w(36,'data');dv.setUint32(40,n*2,true);
+  for(var q=0;q<n;q++)dv.setInt16(44+q*2,Math.max(-1,Math.min(1,buf[q]*g))*32767,true);
+  return new Blob([dv],{type:'audio/wav'});
+}
+function makeDemo(){
+  var blob=makeDemoWav();
+  var t={id:tmpId--,name:'เพลงตัวอย่าง',blob:blob,size:blob.size,title:'เพลงตัวอย่าง',artist:'สร้างในเบราว์เซอร์',album:'',dur:32,raw:DEMO_LRC,source:'demo',
+    looked:true,embedded:'',isDemo:true,err:'',url:URL.createObjectURL(blob),synced:false,lines:[]};
+  var p=parseLyrics(t.raw);t.synced=p.synced;t.lines=p.lines;
+  return t;
+}
+
+/* ---------- adding / removing songs ---------- */
+function probeDuration(url){
+  return new Promise(function(res){
+    var a=new Audio();a.preload='metadata';
+    var t=setTimeout(function(){res(0)},5000);
+    a.onloadedmetadata=function(){clearTimeout(t);res(isFinite(a.duration)?a.duration:0)};
+    a.onerror=function(){clearTimeout(t);res(0)};
+    a.src=url;
+  });
+}
+function isAudioFile(f){
+  return (f.type&&(f.type.indexOf('audio/')===0||f.type==='video/mp4'||f.type==='video/webm'||f.type==='application/ogg'))||
+    /\.(mp3|m4a|m4b|mp4|wav|flac|ogg|oga|aac|opus|wma|weba|webm|3gp|amr|aif|aiff|caf)$/i.test(f.name);
+}
+function addFiles(fileList){
+  var files=Array.prototype.slice.call(fileList||[]);
+  var audios=files.filter(isAudioFile);
+  var texts=files.filter(function(f){return /\.(lrc|txt)$/i.test(f.name)});
+  if(audios.length){
+    toast('กำลังเพิ่มเพลง...');
+    var jobs=audios.map(function(f){
+      var url=URL.createObjectURL(f);
+      return Promise.all([readTags(f),probeDuration(url)]).then(function(r){
+        var tags=r[0],fn=fromFilename(f.name);
+        var rec={name:f.name.replace(/\.[^.]+$/,''),blob:f,size:f.size,
+          title:tags.title||fn.title,artist:tags.artist||fn.artist,album:tags.album||'',dur:r[1],
+          raw:'',source:'',looked:false,embedded:tags.lyrics||''};
+        return idbPut(rec).then(function(id){
+          var t=fromRecord(Object.assign({id:id!=null?id:tmpId--},rec));
+          URL.revokeObjectURL(url);
+          return t;
+        });
+      });
+    });
+    Promise.all(jobs).then(function(list){
+      var onlyDemo=state.tracks.length&&state.tracks.every(function(t){return t.isDemo});
+      if(onlyDemo){URL.revokeObjectURL(state.tracks[0].url);state.tracks=[];state.cur=-1}
+      var first=state.tracks.length;
+      list.forEach(function(t){state.tracks.push(t)});
+      selectTrack(first,true);
+      toast('เพิ่ม '+list.length+' เพลงแล้ว');
+    });
+  }
+  if(texts.length){readText(texts[0],function(raw){applyToCurrent(raw)})}
+  if(!audios.length&&!texts.length&&files.length)toast('ไฟล์นี้ไม่ใช่ไฟล์เสียงหรือไฟล์เนื้อเพลง');
+}
+function readText(file,cb){
+  var r=new FileReader();
+  r.onload=function(){cb(String(r.result||''))};
+  r.onerror=function(){toast('อ่านไฟล์ไม่ได้')};
+  r.readAsText(file,'UTF-8');
+}
+function removeTrack(i){
+  var t=state.tracks[i];if(!t)return;
+  var wasCur=i===state.cur;
+  if(!t.isDemo)idbDel(t.id);
+  URL.revokeObjectURL(t.url);
+  state.tracks.splice(i,1);
+  if(!state.tracks.length){state.tracks.push(makeDemo());state.cur=-1;selectTrack(0,false);return}
+  if(wasCur){audio.pause();selectTrack(Math.min(i,state.tracks.length-1),false)}
+  else{if(i<state.cur)state.cur--;renderQueue();renderNow()}
+}
+function applyToCurrent(raw){
+  var tr=cur();if(!tr)return;
+  applyRaw(tr,raw,'manual');
+  renderLyrics();renderQueue();renderNow();
+  $('lyrText').value=tr.raw;
+  setTab('view');
+  toast(tr.synced?'ใช้เนื้อเพลงแบบซิงก์แล้ว':(tr.lines.length?'บันทึกเนื้อเพลงแล้ว':'ล้างเนื้อเพลงแล้ว'));
+}
+function selectTrack(i,autoplay){
+  if(i<0||i>=state.tracks.length)return;
+  state.cur=i;
+  var tr=cur();
+  tr.err='';
+  audio.src=tr.url;
+  audio.defaultPlaybackRate=SPEEDS[state.speedIdx];
+  audio.playbackRate=SPEEDS[state.speedIdx];
+  renderNow();renderLyrics();renderQueue();
+  $('lyrText').value=tr.raw;
+  $('qInput').value=[tr.title,tr.artist].filter(Boolean).join(' ');
+  $('qResults').replaceChildren();
+  if(state.tab==='stamp')openStamp();
+  setMediaSession(tr);
+  ui();
+  if(autoplay){var p=audio.play();if(p&&p.catch)p.catch(function(){})}
+  autoFetch(tr);
+}
+function step(dir){
+  var n=state.tracks.length;if(!n)return;
+  if(dir<0&&audio.currentTime>3){audio.currentTime=0;return}
+  var i;
+  if(state.shuffle&&n>1){do{i=Math.floor(Math.random()*n)}while(i===state.cur)}
+  else i=(state.cur+dir+n)%n;
+  selectTrack(i,true);
+}
+function togglePlay(){
+  if(audio.paused){var p=audio.play();if(p&&p.catch)p.catch(function(){toast('เล่นไฟล์นี้ไม่ได้')})}
+  else audio.pause();
+}
+function setMediaSession(tr){
+  if(!('mediaSession' in navigator))return;
+  try{
+    navigator.mediaSession.metadata=new MediaMetadata({title:label(tr),artist:tr.artist||'',album:tr.album||''});
+  }catch(e){}
+}
+if('mediaSession' in navigator){
+  try{
+    navigator.mediaSession.setActionHandler('play',function(){audio.play()});
+    navigator.mediaSession.setActionHandler('pause',function(){audio.pause()});
+    navigator.mediaSession.setActionHandler('previoustrack',function(){step(-1)});
+    navigator.mediaSession.setActionHandler('nexttrack',function(){step(1)});
+    navigator.mediaSession.setActionHandler('seekto',function(d){if(d&&d.seekTime!=null)audio.currentTime=d.seekTime});
+  }catch(e){}
+}
+
+/* ---------- rendering ---------- */
+function renderCover(tr){
+  var c=$('cover');c.replaceChildren();
+  var r=rng(hash(tr.name+tr.size));
+  for(var i=0;i<14;i++){
+    var b=document.createElement('span');
+    b.className='bar'+(i%5===2?' m':'');
+    b.style.height=(22+Math.floor(r()*78))+'%';
+    b.style.animationDelay=(-r()*1.1).toFixed(2)+'s';
+    c.appendChild(b);
+  }
+}
+function sourceLabel(tr){
+  return {lrclib:' · ค้นจาก LRCLIB',embedded:' · จากไฟล์เพลง',manual:' · บันทึกเอง',demo:''}[tr.source]||'';
+}
+function renderNow(){
+  var tr=cur();if(!tr)return;
+  $('title').textContent=label(tr);
+  $('artist').textContent=tr.artist||'';
+  $('trackNo').textContent='เพลงที่ '+(state.cur+1)+' จาก '+state.tracks.length;
+  var d=isFinite(audio.duration)&&audio.duration>0?audio.duration:tr.dur;
+  var lyr=tr.lines.length?(tr.synced?'เนื้อเพลงซิงก์':'เนื้อเพลงธรรมดา'):(tr.fetching?'กำลังค้นเนื้อเพลง...':'ยังไม่มีเนื้อเพลง');
+  $('sub').textContent=tr.err||((d?fmt(d)+' นาที · ':'')+lyr);
+  if(renderNow.lastId!==tr.id){renderCover(tr);renderNow.lastId=tr.id}
+}
+function renderQueue(){
+  var ol=$('queue');ol.replaceChildren();
+  state.tracks.forEach(function(t,i){
+    var li=document.createElement('li');
+    var b=document.createElement('button');
+    b.type='button';b.className='q'+(i===state.cur?' cur':'');
+    var no=document.createElement('span');no.className='no';
+    no.textContent=(i===state.cur&&!audio.paused)?'▶':String(i+1);
+    var nm=document.createElement('span');nm.className='nm';
+    nm.textContent=label(t);
+    if(t.artist){var sm=document.createElement('small');sm.textContent=t.artist;nm.appendChild(sm)}
+    var du=document.createElement('span');du.className='du';
+    if(t.lines.length){var tg=document.createElement('span');tg.className='tag';tg.textContent=t.synced?'เนื้อ · ซิงก์':'เนื้อ';du.appendChild(tg)}
+    var dt=document.createElement('span');dt.textContent=t.dur?fmt(t.dur):'–:––';du.appendChild(dt);
+    b.append(no,nm,du);
+    b.addEventListener('click',function(){if(i===state.cur)togglePlay();else selectTrack(i,true)});
+    var rm=document.createElement('button');rm.type='button';rm.className='rm';rm.textContent='×';
+    rm.setAttribute('aria-label','ลบเพลง '+label(t));
+    rm.addEventListener('click',function(){
+      if(rm.classList.contains('armed')){removeTrack(i);return}
+      rm.classList.add('armed');rm.textContent='ลบ?';
+      setTimeout(function(){if(rm.isConnected){rm.classList.remove('armed');rm.textContent='×'}},3000);
+    });
+    li.append(b,rm);ol.appendChild(li);
+  });
+}
+function renderLyrics(){
+  var tr=cur(),body=$('paneView');
+  body.replaceChildren();
+  state.lineEls=[];state.activeIdx=-1;
+  var has=!!(tr&&tr.lines.length);
+  body.classList.toggle('is-empty',!has);
+  body.classList.toggle('plain',has&&!tr.synced);
+  if(!has){
+    $('lyrStatus').textContent=tr&&tr.fetching?'กำลังค้นเนื้อเพลง...':'ยังไม่มีเนื้อเพลง';
+    var e=document.createElement('div');e.className='empty';
+    var s=document.createElement('strong');
+    var p=document.createElement('span');
+    if(tr&&tr.fetching){s.textContent='กำลังค้นเนื้อเพลงให้';p.textContent='รอสักครู่ ถ้าเจอจะขึ้นตรงนี้เอง'}
+    else if(tr&&tr.offline){s.textContent='ต่อเน็ตเพื่อค้นเนื้อเพลงไม่ได้';p.textContent='ลองใหม่เมื่อมีสัญญาณ หรือวางเนื้อเพลงเองก็ได้'}
+    else{s.textContent='ไม่พบเนื้อเพลงของเพลงนี้';p.textContent='ลองค้นด้วยชื่ออื่น หรือวางเนื้อเพลงเอง บันทึกครั้งเดียว ครั้งหน้าขึ้นเองเลย'}
+    e.append(s,p);
+    if(!(tr&&tr.fetching)){
+      var bt=document.createElement('button');bt.type='button';bt.className='txtbtn primary';bt.textContent='ค้นหา / วางเนื้อเพลง';
+      bt.addEventListener('click',function(){setTab('edit')});
+      e.appendChild(bt);
+    }
+    body.appendChild(e);
+    return;
+  }
+  $('lyrStatus').textContent=(tr.synced?'ซิงก์ตามเวลา · แตะบรรทัดเพื่อข้ามไปตรงนั้น':'เนื้อเพลงธรรมดา · ไปที่แท็บปักเวลาเพื่อทำให้ไฮไลต์ตามจังหวะ')+' · '+tr.lines.length+' บรรทัด'+sourceLabel(tr);
+  tr.lines.forEach(function(l){
+    if(!l.text){var g=document.createElement('div');g.className='gap';body.appendChild(g);state.lineEls.push(g);return}
+    var p=document.createElement('p');p.className='ln';
+    var sp=document.createElement('span');sp.textContent=l.text;p.appendChild(sp);
+    if(tr.synced){
+      p.tabIndex=0;p.setAttribute('role','button');
+      p.addEventListener('click',function(){seekTo(l.t)});
+      p.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();seekTo(l.t)}});
+    }
+    body.appendChild(p);state.lineEls.push(p);
+  });
+  body.scrollTop=0;
+  updateActive(audio.currentTime,true);
+}
+function seekTo(t){
+  audio.currentTime=t;state.userScrollUntil=0;
+  if(audio.paused){var p=audio.play();if(p&&p.catch)p.catch(function(){})}
+}
+function activeIndexAt(t){
+  var L=cur().lines,idx=-1;
+  for(var i=0;i<L.length;i++){if(L[i].t<=t+0.05)idx=i;else break}
+  return idx;
+}
+function scrollToLine(idx,smooth){
+  var el=state.lineEls[idx],body=$('paneView');if(!el)return;
+  var top=el.offsetTop-body.clientHeight/2+el.offsetHeight/2;
+  body.scrollTo({top:Math.max(0,top),behavior:(smooth&&!reduceMotion)?'smooth':'auto'});
+}
+function updateActive(t,force){
+  var tr=cur();
+  if(!tr||!tr.synced||state.tab!=='view')return;
+  var idx=activeIndexAt(t);
+  if(idx===state.activeIdx&&!force)return;
+  var els=state.lineEls;
+  if(els[state.activeIdx])els[state.activeIdx].classList.remove('active');
+  if(idx>=0&&els[idx])els[idx].classList.add('active');
+  state.activeIdx=idx;
+  if(idx>=0&&performance.now()>state.userScrollUntil)scrollToLine(idx,!force);
+}
+
+/* ---------- transport UI ---------- */
+function ui(){
+  var tr=cur();if(!tr)return;
+  var t=audio.currentTime||0;
+  var d=isFinite(audio.duration)&&audio.duration>0?audio.duration:tr.dur;
+  $('tCur').textContent=fmt(t);
+  $('tDur').textContent=fmt(d);
+  var seek=$('seek');
+  if(!state.dragging){seek.value=d?Math.round(t/d*1000):0}
+  seek.style.setProperty('--p',(seek.value/10)+'%');
+  updateActive(t,false);
+}
+var raf=0;
+function loop(){raf=0;ui();if(!audio.paused)raf=requestAnimationFrame(loop)}
+function startLoop(){if(!raf)raf=requestAnimationFrame(loop)}
+function setPlayingUI(p){
+  $('playIcon').innerHTML=p?'<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>':'<path d="M8 5v14l11-7z"/>';
+  $('play').setAttribute('aria-label',p?'หยุดชั่วคราว':'เล่น');
+  $('player').classList.toggle('playing',p);
+  renderQueue();
+}
+audio.addEventListener('play',function(){setPlayingUI(true);startLoop()});
+audio.addEventListener('pause',function(){setPlayingUI(false);ui()});
+audio.addEventListener('timeupdate',function(){if(audio.paused)ui()});
+audio.addEventListener('seeked',ui);
+audio.addEventListener('durationchange',function(){
+  var tr=cur();
+  if(tr&&isFinite(audio.duration)&&audio.duration>0){
+    var changed=Math.abs((tr.dur||0)-audio.duration)>0.5;
+    tr.dur=audio.duration;renderNow();renderQueue();ui();
+    if(changed&&!tr.isDemo)saveTrack(tr);
+  }
+});
+audio.addEventListener('error',function(){
+  var tr=cur();if(!tr)return;
+  var code=audio.error?audio.error.code:0;
+  var ext=(tr.blob&&tr.blob.name&&tr.blob.name.indexOf('.')>=0)?tr.blob.name.split('.').pop().toUpperCase():'';
+  tr.err=code===3
+    ?'ถอดรหัสไฟล์ไม่ได้ ไฟล์อาจเสียหรือไม่สมบูรณ์'
+    :'เบราว์เซอร์นี้เล่นไฟล์'+(ext?' '+ext:'')+' ไม่ได้ ลองแปลงเป็น MP3 หรือ M4A ก่อน';
+  renderNow();toast(tr.err);
+});
+audio.addEventListener('ended',function(){
+  var n=state.tracks.length;
+  if(state.repeat===2){audio.currentTime=0;audio.play().catch(function(){});return}
+  if(state.shuffle&&n>1){step(1);return}
+  if(state.cur<n-1){selectTrack(state.cur+1,true);return}
+  if(state.repeat===1){selectTrack(0,true);return}
+  audio.currentTime=0;ui();
+});
+
+var seek=$('seek');
+seek.addEventListener('pointerdown',function(){state.dragging=true});
+['pointerup','pointercancel','change'].forEach(function(ev){seek.addEventListener(ev,function(){state.dragging=false})});
+seek.addEventListener('input',function(){
+  var tr=cur();if(!tr)return;
+  var d=isFinite(audio.duration)&&audio.duration>0?audio.duration:tr.dur;
+  if(d)audio.currentTime=seek.value/1000*d;
+  state.userScrollUntil=0;
+  ui();
+});
+$('play').addEventListener('click',togglePlay);
+$('prev').addEventListener('click',function(){step(-1)});
+$('next').addEventListener('click',function(){step(1)});
+$('shuffle').addEventListener('click',function(){
+  state.shuffle=!state.shuffle;
+  this.classList.toggle('on',state.shuffle);this.setAttribute('aria-pressed',String(state.shuffle));
+});
+$('repeat').addEventListener('click',function(){
+  state.repeat=(state.repeat+1)%3;
+  this.classList.toggle('on',state.repeat>0);
+  $('repBadge').hidden=state.repeat!==2;
+  this.setAttribute('aria-label','เล่นซ้ำ: '+['ปิด','ทั้งคิว','เพลงเดียว'][state.repeat]);
+});
+$('speed').addEventListener('click',function(){
+  state.speedIdx=(state.speedIdx+1)%SPEEDS.length;
+  var s=SPEEDS[state.speedIdx];
+  audio.defaultPlaybackRate=s;audio.playbackRate=s;
+  this.textContent=s+'×';
+});
+function setVolIcon(){
+  $('volIcon').innerHTML=(audio.muted||audio.volume===0)
+    ?'<path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M15 9l6 6M21 9l-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>'
+    :'<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8v8a4.5 4.5 0 002.5-4z"/>';
+  $('mute').setAttribute('aria-label',audio.muted?'เปิดเสียง':'ปิดเสียง');
+}
+$('vol').addEventListener('input',function(){audio.volume=parseFloat(this.value);audio.muted=false;this.style.setProperty('--p',(this.value*100)+'%');setVolIcon()});
+$('mute').addEventListener('click',function(){audio.muted=!audio.muted;setVolIcon()});
+$('vol').style.setProperty('--p','100%');
+setVolIcon();
+
+/* ---------- files ---------- */
+function bindLabel(id,inputId){$(id).addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();$(inputId).click()}})}
+bindLabel('addBtn','fileInput');
+bindLabel('openLrc','lrcInput');
+$('fileInput').addEventListener('change',function(){addFiles(this.files);this.value=''});
+$('lrcInput').addEventListener('change',function(){
+  var f=this.files&&this.files[0];this.value='';
+  if(f)readText(f,function(raw){$('lyrText').value=raw;applyToCurrent(raw)});
+});
+var appEl=$('app');
+['dragenter','dragover'].forEach(function(ev){
+  document.addEventListener(ev,function(e){
+    if(e.dataTransfer&&Array.prototype.indexOf.call(e.dataTransfer.types||[],'Files')>=0){e.preventDefault();appEl.classList.add('drop')}
+  });
+});
+document.addEventListener('dragleave',function(e){if(!e.relatedTarget)appEl.classList.remove('drop')});
+document.addEventListener('drop',function(e){
+  e.preventDefault();appEl.classList.remove('drop');
+  if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length)addFiles(e.dataTransfer.files);
+});
+
+/* ---------- lyric tabs ---------- */
+function setTab(name){
+  state.tab=name;
+  ['View','Edit','Stamp'].forEach(function(n){
+    var on=n.toLowerCase()===name;
+    $('tab'+n).setAttribute('aria-selected',String(on));
+    $('pane'+n).hidden=!on;
+  });
+  if(name==='view'){state.activeIdx=-1;updateActive(audio.currentTime,true)}
+  if(name==='edit'){var tr=cur();if(tr)$('lyrText').value=tr.raw}
+  if(name==='stamp')openStamp();
+}
+$('tabView').addEventListener('click',function(){setTab('view')});
+$('tabEdit').addEventListener('click',function(){setTab('edit')});
+$('tabStamp').addEventListener('click',function(){setTab('stamp')});
+$('paneView').addEventListener('wheel',function(){state.userScrollUntil=performance.now()+3500},{passive:true});
+$('paneView').addEventListener('touchstart',function(){state.userScrollUntil=performance.now()+3500},{passive:true});
+$('paneView').addEventListener('pointerdown',function(){state.userScrollUntil=performance.now()+3500});
+function setSize(i){
+  state.sizeIdx=Math.max(0,Math.min(SIZES.length-1,i));
+  $('lyrCard').style.setProperty('--lyric-size',SIZES[state.sizeIdx]+'rem');
+  $('sizeDn').disabled=state.sizeIdx===0;$('sizeUp').disabled=state.sizeIdx===SIZES.length-1;
+  if(state.activeIdx>=0)setTimeout(function(){scrollToLine(state.activeIdx,false)},0);
+}
+$('sizeDn').addEventListener('click',function(){setSize(state.sizeIdx-1)});
+$('sizeUp').addEventListener('click',function(){setSize(state.sizeIdx+1)});
+
+/* ---------- edit pane: search + paste ---------- */
+$('searchForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var q=$('qInput').value.trim();if(!q)return;
+  var box=$('qResults');box.replaceChildren();
+  var msg=document.createElement('p');msg.className='hint';msg.textContent='กำลังค้นหา...';box.appendChild(msg);
+  getJson(LR+'search?'+qs({q:q})).then(function(list){
+    box.replaceChildren();
+    list=(list||[]).filter(hasLyr).slice(0,8);
+    if(!list.length){var m=document.createElement('p');m.className='hint';m.textContent='ไม่พบผลลัพธ์ ลองคำค้นอื่น หรือวางเนื้อเพลงเองด้านล่าง';box.appendChild(m);return}
+    list.forEach(function(j){
+      var b=document.createElement('button');b.type='button';b.className='res';
+      var l=document.createElement('span');
+      l.textContent=(j.trackName||'ไม่ทราบชื่อ');
+      var sm=document.createElement('small');sm.textContent=[j.artistName,j.albumName,j.duration?fmt(j.duration):''].filter(Boolean).join(' · ');
+      l.appendChild(sm);
+      var tg=document.createElement('span');tg.className='tag';tg.textContent=j.syncedLyrics?'ซิงก์':'ธรรมดา';
+      b.append(l,tg);
+      b.addEventListener('click',function(){
+        var tr=cur();if(!tr)return;
+        applyRaw(tr,j.syncedLyrics||j.plainLyrics,'lrclib');
+        box.replaceChildren();
+        renderLyrics();renderQueue();renderNow();
+        $('lyrText').value=tr.raw;
+        setTab('view');
+        toast('ใช้เนื้อเพลงนี้แล้ว');
+      });
+      box.appendChild(b);
+    });
+  },function(){
+    box.replaceChildren();
+    var m=document.createElement('p');m.className='hint';m.textContent='ต่อเน็ตเพื่อค้นหาไม่ได้ ลองใหม่เมื่อมีสัญญาณ';box.appendChild(m);
+  });
+});
+$('saveLyr').addEventListener('click',function(){applyToCurrent($('lyrText').value)});
+$('clearLyr').addEventListener('click',function(){$('lyrText').value='';$('lyrText').focus()});
+$('copyLyr').addEventListener('click',function(){
+  var ta=$('lyrText'),text=ta.value;
+  if(!text.trim()){toast('ยังไม่มีเนื้อเพลงให้คัดลอก');return}
+  function fallback(){ta.focus();ta.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}toast(ok?'คัดลอกแล้ว':'เลือกข้อความไว้แล้ว กดคัดลอกจากเมนูของเครื่องได้เลย')}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){toast('คัดลอกแล้ว')}).catch(fallback)}
+  else fallback();
+});
+
+/* ---------- stamp pane ---------- */
+function openStamp(){
+  var tr=cur();
+  stamp.lines=tr?tr.lines.map(function(l){return l.text}).filter(Boolean):[];
+  stamp.times=[];stamp.idx=0;
+  renderStamp();
+}
+function renderStamp(){
+  var list=$('stampList');list.replaceChildren();
+  var n=stamp.lines.length;
+  if(!n){
+    var e=document.createElement('div');e.className='stamp-empty';
+    e.textContent='ยังไม่มีเนื้อเพลงให้ปักเวลา ไปที่แท็บค้นหา / แก้ไขก่อน';
+    list.appendChild(e);
+  }
+  var nextEl=null;
+  stamp.lines.forEach(function(text,i){
+    var r=document.createElement('div');
+    r.className='srow'+(i<stamp.idx?' done':'')+(i===stamp.idx?' next':'');
+    var st=document.createElement('span');st.className='st';
+    st.textContent=stamp.times[i]!=null?fmtStamp(stamp.times[i]):'––:––.––';
+    var tx=document.createElement('span');tx.className='tx';tx.textContent=text;
+    r.append(st,tx);list.appendChild(r);
+    if(i===stamp.idx)nextEl=r;
+  });
+  if(nextEl)list.scrollTo({top:Math.max(0,nextEl.offsetTop-list.clientHeight/2+nextEl.offsetHeight/2),behavior:'auto'});
+  var done=n>0&&stamp.idx>=n;
+  $('stampBtn').textContent=!n?'ปักเวลา':(done?'ปักครบแล้ว':'ปักเวลา · บรรทัดที่ '+(stamp.idx+1));
+  $('stampBtn').disabled=!n||done;
+  $('stampBack').disabled=stamp.idx===0;
+  $('stampReset').disabled=stamp.idx===0;
+  $('stampSave').disabled=!n;
+}
+function doStamp(){
+  if(stamp.idx>=stamp.lines.length)return;
+  stamp.times[stamp.idx]=Math.max(0,audio.currentTime-0.15);
+  stamp.idx++;
+  renderStamp();
+  if(stamp.idx===stamp.lines.length)toast('ปักเวลาครบแล้ว กดบันทึกเพื่อใช้ได้เลย');
+}
+$('stampBtn').addEventListener('click',doStamp);
+$('stampBack').addEventListener('click',function(){if(stamp.idx>0){stamp.idx--;stamp.times[stamp.idx]=null;renderStamp()}});
+$('stampReset').addEventListener('click',function(){stamp.times=[];stamp.idx=0;renderStamp()});
+$('stampSave').addEventListener('click',function(){
+  var n=stamp.lines.length;
+  if(stamp.idx<n){toast('ปักไปแล้ว '+stamp.idx+' จาก '+n+' บรรทัด ปักให้ครบก่อนนะ');return}
+  var lrc=stamp.lines.map(function(t,i){return fmtLrc(stamp.times[i])+t}).join('\n');
+  var tr=cur();
+  applyRaw(tr,lrc,'manual');
+  $('lyrText').value=lrc;
+  renderLyrics();renderQueue();renderNow();
+  setTab('view');
+  toast('บันทึกเนื้อเพลงแบบซิงก์แล้ว');
+});
+
+/* ---------- keyboard ---------- */
+document.addEventListener('keydown',function(e){
+  var el=e.target,tag=el&&el.tagName;
+  if(tag==='TEXTAREA'||(tag==='INPUT'&&el.type!=='range'))return;
+  if(e.code==='Space'&&tag!=='BUTTON'&&!(el.getAttribute&&el.getAttribute('role')==='button')){
+    e.preventDefault();
+    if(state.tab==='stamp')doStamp();else togglePlay();
+  }else if((e.code==='ArrowLeft'||e.code==='ArrowRight')&&tag!=='INPUT'){
+    audio.currentTime=Math.max(0,audio.currentTime+(e.code==='ArrowRight'?5:-5));
+  }
+});
+
+/* ---------- boot ---------- */
+setSize(state.sizeIdx);
+idbOpen().then(idbAll).then(function(recs){
+  recs.sort(function(a,b){return a.id-b.id});
+  recs.forEach(function(r){try{state.tracks.push(fromRecord(r))}catch(e){}});
+  if(!state.tracks.length){state.tracks.push(makeDemo())}
+  else $('saveHint').textContent='เพลงที่เพิ่มจะถูกเก็บไว้ในเบราว์เซอร์เครื่องนี้ ไม่ต้องเพิ่มใหม่ทุกครั้ง';
+  selectTrack(0,false);
+});
+})();
+</script>
+</body>
+</html>
